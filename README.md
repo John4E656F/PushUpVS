@@ -8,8 +8,8 @@ personal bests, workout videos, and a synced history.
 
 | Layer | Tech |
 | --- | --- |
-| App | **Expo SDK 56** + Expo Router, TypeScript, **NativeWind** (Tailwind), Zustand |
-| Rep counting | **VisionCamera** frame processors + **MoveNet** (TensorFlow Lite) + a pure-TS rep state machine |
+| App | **Expo SDK 57** + Expo Router, TypeScript, **NativeWind** (Tailwind), Zustand |
+| Rep counting | **VisionCamera 5** (Nitro) frame outputs + **MoveNet** (TensorFlow Lite via `react-native-fast-tflite` 3) + a pure-TS rep state machine |
 | Auth & billing | **Clerk** (`@clerk/clerk-expo`) — sign-in/SSO and Clerk Billing subscriptions (7-day trial, then subscribe) |
 | API | **Go** (`server/`) — stdlib `net/http`, Clerk JWT middleware, Svix-verified Clerk webhooks |
 | Database | **MongoDB** (users, sessions, stats) |
@@ -17,8 +17,11 @@ personal bests, workout videos, and a synced history.
 
 ## How counting works
 
-1. The camera streams frames into a VisionCamera **frame processor** (worklet thread).
-2. Each frame is resized to 192×192 RGB and run through **MoveNet SinglePose Lightning** (int8 TFLite) at ~15 fps.
+1. The camera streams RGB frames into a VisionCamera 5 **frame output** running on its worklet
+   thread (`react-native-vision-camera-worklets` + `react-native-worklets`), with
+   `dropFramesWhileBusy` back-pressuring the pipeline instead of queueing frames.
+2. Each frame is center-cropped and resized to 192×192 with **nitro-image**, then run through
+   **MoveNet SinglePose Lightning** (int8 TFLite).
 3. The 17 keypoints go to the JS thread, where a pure TypeScript **state machine**
    (`src/lib/pose/rep-counter.ts`) tracks the elbow angle: arms extended → below the
    down threshold → extended again = 1 rep. Hysteresis + minimum cycle time filter jitter.

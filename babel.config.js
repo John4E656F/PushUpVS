@@ -5,9 +5,7 @@ module.exports = function (api) {
       ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
       'nativewind/babel',
     ],
-    // VisionCamera frame processors run on react-native-worklets-core;
-    // its plugin compiles 'worklet'-directive functions. Reanimated 4's
-    // react-native-worklets plugin is applied by babel-preset-expo.
-    plugins: ['react-native-worklets-core/plugin'],
+    // 'worklet' directives (VisionCamera frame outputs, Reanimated) are
+    // compiled by react-native-worklets' plugin via babel-preset-expo.
   };
 };

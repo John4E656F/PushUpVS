@@ -1,5 +1,7 @@
 // Live pushup session: front camera + MoveNet pose counting, with a manual
 // tap-to-count fallback (used automatically when the model can't load).
+// Built on VisionCamera 5's output-based API: the preview view hosts a
+// frame output (pose inference) and a video output (optional recording).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
@@ -10,7 +12,8 @@ import {
   Camera,
   useCameraDevice,
   useCameraPermission,
-  type VideoFile,
+  useVideoOutput,
+  type Recorder,
 } from 'react-native-vision-camera';
 
 import { Btn, Icon } from '@/components/ui';
@@ -31,7 +34,6 @@ export default function SessionScreen() {
 
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('front');
-  const cameraRef = useRef<Camera>(null);
 
   const [mode, setMode] = useState<Mode>('pose');
   const [manualReps, setManualReps] = useState(0);
@@ -40,10 +42,15 @@ export default function SessionScreen() {
   const [finishing, setFinishing] = useState(false);
   const startedAtRef = useRef(new Date());
 
+  const recorderRef = useRef<Recorder | null>(null);
+  const recordedVideoRef = useRef<string | undefined>(undefined);
+  const pendingFinishRef = useRef(false);
+
   const onRep = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   }, []);
-  const { frameProcessor, modelState, reps: poseReps, update } = usePushupCounter(onRep);
+  const { frameOutput, modelState, reps: poseReps, update } = usePushupCounter(onRep);
+  const videoOutput = useVideoOutput({ fileType: 'mp4', enableAudio: false });
 
   // No model → manual counting so the session still works offline.
   useEffect(() => {
@@ -64,6 +71,7 @@ export default function SessionScreen() {
 
   const reps = mode === 'pose' ? poseReps : manualReps;
   const cameraActive = hasPermission && device != null && !finishing;
+  const poseActive = mode === 'pose' && modelState === 'ready';
 
   const goComplete = useCallback(
     (videoUri?: string) => {
@@ -81,37 +89,37 @@ export default function SessionScreen() {
     [router, mode, poseReps, manualReps],
   );
 
-  const toggleRecording = useCallback(() => {
-    const cam = cameraRef.current;
-    if (!cam) return;
+  const toggleRecording = useCallback(async () => {
     if (recording) {
-      cam.stopRecording().catch(() => {});
       setRecording(false);
+      await recorderRef.current?.stopRecording().catch(() => {});
       return;
     }
-    setRecording(true);
-    cam.startRecording({
-      fileType: 'mp4',
-      onRecordingFinished: (video: VideoFile) => {
-        recordedVideoRef.current = video.path;
-        if (pendingFinishRef.current) goComplete(video.path);
-      },
-      onRecordingError: () => {
-        setRecording(false);
-        if (pendingFinishRef.current) goComplete();
-      },
-    });
-  }, [recording, goComplete]);
-
-  const recordedVideoRef = useRef<string | undefined>(undefined);
-  const pendingFinishRef = useRef(false);
+    try {
+      const recorder = await videoOutput.createRecorder({});
+      recorderRef.current = recorder;
+      await recorder.startRecording(
+        (filePath) => {
+          recordedVideoRef.current = filePath;
+          if (pendingFinishRef.current) goComplete(filePath);
+        },
+        () => {
+          setRecording(false);
+          if (pendingFinishRef.current) goComplete();
+        },
+      );
+      setRecording(true);
+    } catch {
+      setRecording(false);
+    }
+  }, [recording, videoOutput, goComplete]);
 
   const finish = useCallback(() => {
     setFinishing(true);
-    if (recording && cameraRef.current) {
-      // Wait for onRecordingFinished so the file is fully written.
+    if (recording && recorderRef.current) {
+      // Wait for the finished-callback so the file is fully written.
       pendingFinishRef.current = true;
-      cameraRef.current.stopRecording().catch(() => goComplete(recordedVideoRef.current));
+      recorderRef.current.stopRecording().catch(() => goComplete(recordedVideoRef.current));
     } else {
       goComplete(recordedVideoRef.current);
     }
@@ -137,13 +145,11 @@ export default function SessionScreen() {
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       {cameraActive && (
         <Camera
-          ref={cameraRef}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           device={device}
           isActive
-          video
-          audio={false}
-          frameProcessor={mode === 'pose' && modelState === 'ready' ? frameProcessor : undefined}
+          outputs={poseActive ? [frameOutput, videoOutput] : [videoOutput]}
+          resizeMode="cover"
         />
       )}
       {/* dark scrim so the HUD stays readable over the preview */}
