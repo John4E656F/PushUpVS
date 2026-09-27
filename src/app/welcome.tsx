@@ -4,11 +4,18 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Btn, Icon } from '@/components/ui';
+import { useStore } from '@/lib/store';
 import { T, wfont, wfontDisplay } from '@/lib/theme';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const markEntered = useStore((s) => s.markEntered);
+
+  const startTraining = () => {
+    markEntered();
+    router.replace('/(tabs)');
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -52,11 +59,11 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 24, gap: 12 }}>
-        <Btn variant="primary" full size="lg" iconRight="arrowR" onPress={() => router.push('/(auth)')}>
-          Get started
+        <Btn variant="primary" full size="lg" iconRight="arrowR" onPress={startTraining}>
+          Start training — no account needed
         </Btn>
-        <Btn variant="ghost" full size="lg" onPress={() => router.push({ pathname: '/(auth)', params: { mode: 'login' } })}>
-          I already have an account
+        <Btn variant="ghost" full size="lg" onPress={() => router.push('/(auth)')}>
+          Sign in or create an account
         </Btn>
       </View>
     </View>

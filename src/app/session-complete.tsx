@@ -22,7 +22,7 @@ type UploadState = 'idle' | 'uploading' | 'done' | 'failed';
 export default function SessionCompleteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { getToken } = useAuth();
+  const { isSignedIn, getToken } = useAuth();
   const params = useLocalSearchParams<{
     reps: string;
     durationSec: string;
@@ -209,19 +209,27 @@ export default function SessionCompleteScreen() {
                 <Text style={{ fontSize: 12.5, color: T.text2 }}>
                   {upload === 'done'
                     ? 'Uploaded to your cloud library ✓'
-                    : upload === 'failed'
-                      ? needsSubscription
-                        ? 'Subscription needed to upload videos'
-                        : 'Upload failed — try again'
-                      : 'Save it to your cloud library'}
+                    : !isSignedIn
+                      ? 'Sign in to save it to your cloud library'
+                      : upload === 'failed'
+                        ? needsSubscription
+                          ? 'PushUp Pro unlocks cloud videos'
+                          : 'Upload failed — try again'
+                        : 'Save it to your cloud library'}
                 </Text>
               </View>
               {upload === 'uploading' ? (
                 <ActivityIndicator color={T.accent} />
               ) : upload !== 'done' ? (
-                <Btn variant="secondary" size="sm" onPress={doUpload} disabled={!saved || !saved.synced}>
-                  {upload === 'failed' ? 'Retry' : 'Upload'}
-                </Btn>
+                !isSignedIn ? (
+                  <Btn variant="secondary" size="sm" onPress={() => router.push('/(auth)')}>
+                    Sign in
+                  </Btn>
+                ) : (
+                  <Btn variant="secondary" size="sm" onPress={doUpload} disabled={!saved || !saved.synced}>
+                    {upload === 'failed' ? 'Retry' : 'Upload'}
+                  </Btn>
+                )
               ) : null}
             </View>
             {upload === 'uploading' && <Bar value={uploadProgress} h={6} style={{ marginTop: 12 }} />}

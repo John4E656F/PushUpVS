@@ -1,8 +1,11 @@
 // Zustand store — local-first session log with best-effort server sync.
-// Sessions are always saved on device immediately; syncing to the Go API
-// happens opportunistically and flips `synced` on success.
+// Sessions are always saved on device immediately (and persisted across
+// restarts, so guest mode is real); syncing to the Go API happens
+// opportunistically and flips `synced` on success.
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { api, ApiUnavailableError, SubscriptionRequiredError, type TokenGetter } from './api';
 import type { CountMethod, Me, Stats, WorkoutSession } from './types';
@@ -56,10 +59,13 @@ type AppState = {
   stats: Stats | null;
   sessions: WorkoutSession[];
   dailyGoal: number;
-  /** false once the API said 402 — routes the user to the paywall. */
+  /** false once the API said 402 — Pro features route to the paywall. */
   entitled: boolean;
   usingServer: boolean;
+  /** True once the user has entered the app (guest or signed in). */
+  hasEntered: boolean;
 
+  markEntered: () => void;
   refresh: (getToken: TokenGetter) => Promise<void>;
   completeSession: (
     getToken: TokenGetter,
@@ -77,16 +83,43 @@ type AppState = {
   setDailyGoal: (getToken: TokenGetter, goal: number) => Promise<void>;
 };
 
-export const useStore = create<AppState>((set, get) => ({
-  me: null,
-  stats: null,
-  sessions: [],
-  dailyGoal: 50,
-  entitled: true,
-  usingServer: false,
+export const useStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      me: null,
+      stats: null,
+      sessions: [],
+      dailyGoal: 50,
+      entitled: true,
+      usingServer: false,
+      hasEntered: false,
+
+      markEntered: () => set({ hasEntered: true }),
 
   refresh: async (getToken) => {
     try {
+      // Back-fill: push sessions recorded while signed out (or offline) so a
+      // guest's history survives creating an account.
+      const pending = get().sessions.filter((s) => !s.synced);
+      for (const p of pending) {
+        try {
+          const saved = await api.createSession(getToken, {
+            reps: p.reps,
+            durationSec: p.durationSec,
+            method: p.method,
+            startedAt: p.startedAt,
+            ...(p.repTimesMs ? { repTimesMs: p.repTimesMs } : {}),
+            ...(p.videoStartMs ? { videoStartMs: p.videoStartMs } : {}),
+          });
+          set((st) => ({
+            sessions: st.sessions.map((x) => (x.id === p.id ? { ...saved, synced: true } : x)),
+          }));
+        } catch (e) {
+          if (e instanceof ApiUnavailableError) throw e; // offline — keep local
+          break; // other errors: stop back-filling, keep the rest local
+        }
+      }
+
       const [me, stats, list] = await Promise.all([
         api.getMe(getToken),
         api.getStats(getToken).catch((e) => {
@@ -98,13 +131,16 @@ export const useStore = create<AppState>((set, get) => ({
           throw e;
         }),
       ]);
+      // Server list wins, but sessions that still failed to back-fill stay
+      // visible at the front until they sync.
+      const stillLocal = get().sessions.filter((s) => !s.synced);
       set({
         me,
         entitled: me.entitled,
         dailyGoal: me.dailyGoal,
         usingServer: true,
         ...(stats ? { stats } : {}),
-        ...(list ? { sessions: list.sessions.map((s) => ({ ...s, synced: true })) } : {}),
+        ...(list ? { sessions: [...stillLocal, ...list.sessions.map((s) => ({ ...s, synced: true }))] } : {}),
       });
     } catch (e) {
       if (e instanceof ApiUnavailableError) {
@@ -176,4 +212,12 @@ export const useStore = create<AppState>((set, get) => ({
       // keep the local value; it syncs next time the server is reachable
     }
   },
-}));
+    }),
+    {
+      name: 'pushup-store',
+      storage: createJSONStorage(() => AsyncStorage),
+      // Only durable, device-owned state; server-derived state is refetched.
+      partialize: (s) => ({ sessions: s.sessions, dailyGoal: s.dailyGoal, hasEntered: s.hasEntered }),
+    },
+  ),
+);

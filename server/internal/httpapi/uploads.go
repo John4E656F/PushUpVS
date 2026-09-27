@@ -53,6 +53,10 @@ func (a *API) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 	var key string
 	switch body.Kind {
 	case "video":
+		if !user.Entitled(time.Now().UTC()) {
+			writeErr(w, http.StatusPaymentRequired, "subscription_required", "PushUp Pro unlocks cloud workout videos")
+			return
+		}
 		ext, ok := videoContentTypes[body.ContentType]
 		if !ok {
 			writeErr(w, http.StatusBadRequest, "bad_request", "contentType must be video/mp4 or video/quicktime")
@@ -95,6 +99,10 @@ func (a *API) handlePresignDownload(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	if key == "" || !blob.OwnedByUser(key, user.ID) {
 		writeErr(w, http.StatusForbidden, "forbidden", "key does not belong to this user")
+		return
+	}
+	if strings.HasPrefix(key, "videos/") && !user.Entitled(time.Now().UTC()) {
+		writeErr(w, http.StatusPaymentRequired, "subscription_required", "PushUp Pro unlocks cloud workout videos")
 		return
 	}
 	url, err := a.blob.PresignGet(r.Context(), key, presignTTL)

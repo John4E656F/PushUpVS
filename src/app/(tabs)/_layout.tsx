@@ -1,27 +1,29 @@
 import { useEffect } from 'react';
-import { Redirect, Tabs, useRouter } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 
 import { TabBar } from '@/components/tab-bar';
 import { useStore } from '@/lib/store';
 
 export default function TabsLayout() {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { isSignedIn, getToken } = useAuth();
   const router = useRouter();
   const refresh = useStore((s) => s.refresh);
   const entitled = useStore((s) => s.entitled);
   const usingServer = useStore((s) => s.usingServer);
+  const markEntered = useStore((s) => s.markEntered);
 
+  // Guests included: refresh falls back to locally computed stats when
+  // there's no session token or the server is unreachable.
   useEffect(() => {
-    if (isSignedIn) refresh(getToken).catch(() => {});
-  }, [isSignedIn, refresh, getToken]);
+    markEntered();
+    refresh(getToken).catch(() => {});
+  }, [isSignedIn, refresh, getToken, markEntered]);
 
-  // Trial expired and no active plan → the paywall takes over.
+  // Pro features locked (trial over, no plan) → offer the upgrade once.
   useEffect(() => {
     if (usingServer && !entitled) router.push('/paywall');
   }, [usingServer, entitled, router]);
-
-  if (isLoaded && !isSignedIn) return <Redirect href="/welcome" />;
 
   return (
     <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...(props as any)} />}>

@@ -39,7 +39,7 @@ function Row({
 export default function ProfileScreen() {
   const router = useRouter();
   const { user } = useUser();
-  const { getToken, signOut } = useAuth();
+  const { isSignedIn, getToken, signOut } = useAuth();
   const me = useStore((s) => s.me);
   const dailyGoal = useStore((s) => s.dailyGoal);
   const setDailyGoal = useStore((s) => s.setDailyGoal);
@@ -53,16 +53,21 @@ export default function ProfileScreen() {
     ? Math.max(0, Math.ceil((new Date(me.trialEndsAt).getTime() - Date.now()) / 86400000))
     : null;
 
-  const planLabel =
-    me == null
+  const planLabel = !isSignedIn
+    ? 'Training as a guest — data lives on this phone'
+    : me == null
       ? 'Offline — sign-in synced when server is reachable'
       : me.plan === 'pro'
         ? 'PushUp Pro — active'
         : me.entitled
           ? `Free trial — ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left`
-          : 'Trial ended — subscribe to keep training';
+          : 'Free plan — Pro unlocks videos & exports';
 
   const changeAvatar = async () => {
+    if (!isSignedIn) {
+      router.push('/(auth)');
+      return;
+    }
     setNotice('');
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -102,11 +107,13 @@ export default function ProfileScreen() {
       await WebBrowser.openBrowserAsync(url);
     } catch (e) {
       setNotice(
-        e instanceof ApiUnavailableError
-          ? 'Exports need the server — configure EXPO_PUBLIC_API_URL.'
-          : e instanceof SubscriptionRequiredError
-            ? 'Subscribe to export your history.'
-            : 'Export failed — try again.',
+        !isSignedIn
+          ? 'Create an account to export your history.'
+          : e instanceof ApiUnavailableError
+            ? 'Exports need the server — configure EXPO_PUBLIC_API_URL.'
+            : e instanceof SubscriptionRequiredError
+              ? 'PushUp Pro unlocks exports.'
+              : 'Export failed — try again.',
       );
     } finally {
       setExportBusy(false);
@@ -145,13 +152,31 @@ export default function ProfileScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: wfont(700), fontSize: 17, color: T.text }}>
-            {user?.fullName || me?.name || 'Pushup athlete'}
+            {user?.fullName || me?.name || (isSignedIn ? 'Pushup athlete' : 'Guest athlete')}
           </Text>
           <Text style={{ fontSize: 13, color: T.text2, marginTop: 2 }}>
-            {user?.primaryEmailAddress?.emailAddress ?? me?.email ?? ''}
+            {user?.primaryEmailAddress?.emailAddress ?? me?.email ?? (isSignedIn ? '' : 'Your reps are saved on this phone')}
           </Text>
         </View>
       </Card>
+
+      {!isSignedIn && (
+        <Card
+          onPress={() => router.push('/(auth)')}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 14, marginTop: 10, borderColor: T.accent }}
+        >
+          <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(60,228,155,0.14)', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="user" size={19} color={T.accent} strokeWidth={2.2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: wfont(700), fontSize: 15, color: T.text }}>Create a free account</Text>
+            <Text style={{ fontSize: 12.5, color: T.text2, marginTop: 1 }}>
+              Back up your history and unlock cloud videos & exports
+            </Text>
+          </View>
+          <Icon name="chevR" size={17} color={T.accent} />
+        </Card>
+      )}
 
       {!!notice && <Text style={{ color: T.heat, fontSize: 13.5, marginTop: 10 }}>{notice}</Text>}
 
@@ -190,7 +215,7 @@ export default function ProfileScreen() {
         tint={me?.entitled === false ? T.heat : undefined}
         label={me?.plan === 'pro' ? 'PushUp Pro' : 'Your plan'}
         sub={planLabel}
-        onPress={() => router.push('/paywall')}
+        onPress={() => (isSignedIn ? router.push('/paywall') : router.push('/(auth)'))}
       />
 
       <Text style={{ fontFamily: wfontDisplay(600), fontSize: 16, textTransform: 'uppercase', color: T.text2, marginTop: 22, marginBottom: 8 }}>
@@ -212,9 +237,11 @@ export default function ProfileScreen() {
         />
       </View>
 
-      <View style={{ marginTop: 22, gap: 9 }}>
-        <Row icon="close" label="Sign out" tint={T.heat} onPress={confirmSignOut} />
-      </View>
+      {isSignedIn && (
+        <View style={{ marginTop: 22, gap: 9 }}>
+          <Row icon="close" label="Sign out" tint={T.heat} onPress={confirmSignOut} />
+        </View>
+      )}
 
       <Text style={{ textAlign: 'center', fontSize: 12, color: T.text3, marginTop: 26 }}>
         PushUp v1.0.0 · every rep counted

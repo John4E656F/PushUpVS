@@ -46,13 +46,13 @@ func (a *API) requireUser(next http.Handler) http.Handler {
 	})
 }
 
-// requireEntitled enforces the trial-then-subscription business rule.
-// Expired trial + no active plan => 402 so the app can route to the paywall.
+// requireEntitled gates Pro features (cloud video, exports). Counting and
+// stats stay free — expired trial + no plan => 402 so the app can upsell.
 func (a *API) requireEntitled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := currentUser(r)
 		if user == nil || !user.Entitled(time.Now().UTC()) {
-			writeErr(w, http.StatusPaymentRequired, "subscription_required", "trial ended — subscribe to keep training")
+			writeErr(w, http.StatusPaymentRequired, "subscription_required", "PushUp Pro unlocks cloud videos and exports")
 			return
 		}
 		next.ServeHTTP(w, r)

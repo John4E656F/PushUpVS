@@ -29,25 +29,27 @@ func (a *API) Handler() http.Handler {
 	})
 	mux.Handle("POST /v1/webhooks/clerk", http.HandlerFunc(a.handleClerkWebhook))
 
-	// Authenticated but not entitlement-gated: the app needs /v1/me to decide
-	// whether to show the paywall, and profile edits stay available.
+	// Authenticated, free forever: counting, history, and stats are the core
+	// product. /v1/me also tells the app whether Pro features are unlocked.
 	authed := func(h http.HandlerFunc) http.Handler {
 		return a.requireAuth(a.requireUser(h))
 	}
 	mux.Handle("GET /v1/me", authed(a.handleGetMe))
 	mux.Handle("PATCH /v1/me", authed(a.handlePatchMe))
+	mux.Handle("POST /v1/sessions", authed(a.handleCreateSession))
+	mux.Handle("GET /v1/sessions", authed(a.handleListSessions))
+	mux.Handle("DELETE /v1/sessions/{id}", authed(a.handleDeleteSession))
+	mux.Handle("GET /v1/stats", authed(a.handleStats))
+	// Presign endpoints are authed; video keys are Pro-gated inside the
+	// handlers so avatar uploads stay free.
+	mux.Handle("POST /v1/uploads/presign", authed(a.handlePresignUpload))
+	mux.Handle("GET /v1/files/url", authed(a.handlePresignDownload))
 
-	// Entitlement-gated (active trial or pro plan).
+	// Pro-gated (active trial or pro plan): cloud video and data exports.
 	gated := func(h http.HandlerFunc) http.Handler {
 		return a.requireAuth(a.requireUser(a.requireEntitled(h)))
 	}
-	mux.Handle("POST /v1/sessions", gated(a.handleCreateSession))
-	mux.Handle("GET /v1/sessions", gated(a.handleListSessions))
-	mux.Handle("DELETE /v1/sessions/{id}", gated(a.handleDeleteSession))
 	mux.Handle("POST /v1/sessions/{id}/video", gated(a.handleAttachVideo))
-	mux.Handle("GET /v1/stats", gated(a.handleStats))
-	mux.Handle("POST /v1/uploads/presign", gated(a.handlePresignUpload))
-	mux.Handle("GET /v1/files/url", gated(a.handlePresignDownload))
 	mux.Handle("POST /v1/export", gated(a.handleExport))
 
 	return a.cors(logRequests(mux))
