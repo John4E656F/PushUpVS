@@ -15,11 +15,13 @@ import (
 
 func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Reps        int       `json:"reps"`
-		DurationSec int       `json:"durationSec"`
-		Method      string    `json:"method"`
-		StartedAt   time.Time `json:"startedAt"`
-		VideoKey    string    `json:"videoKey"`
+		Reps         int       `json:"reps"`
+		DurationSec  int       `json:"durationSec"`
+		Method       string    `json:"method"`
+		StartedAt    time.Time `json:"startedAt"`
+		VideoKey     string    `json:"videoKey"`
+		RepTimesMs   []int     `json:"repTimesMs"`
+		VideoStartMs int       `json:"videoStartMs"`
 	}
 	if err := decodeBody(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
@@ -33,16 +35,30 @@ func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad_request", `method must be "pose" or "manual"`)
 		return
 	}
+	if len(body.RepTimesMs) > body.Reps {
+		body.RepTimesMs = body.RepTimesMs[:body.Reps]
+	}
+	for _, t := range body.RepTimesMs {
+		if t < 0 || t > 24*60*60*1000 {
+			writeErr(w, http.StatusBadRequest, "bad_request", "repTimesMs entries must be within the session")
+			return
+		}
+	}
+	if body.VideoStartMs < 0 {
+		body.VideoStartMs = 0
+	}
 	if body.StartedAt.IsZero() {
 		body.StartedAt = time.Now().UTC()
 	}
 	user := currentUser(r)
 	sess := &models.Session{
-		UserID:      user.ID,
-		Reps:        body.Reps,
-		DurationSec: body.DurationSec,
-		Method:      body.Method,
-		StartedAt:   body.StartedAt.UTC(),
+		UserID:       user.ID,
+		Reps:         body.Reps,
+		DurationSec:  body.DurationSec,
+		Method:       body.Method,
+		RepTimesMs:   body.RepTimesMs,
+		VideoStartMs: body.VideoStartMs,
+		StartedAt:    body.StartedAt.UTC(),
 	}
 	if body.VideoKey != "" {
 		if !ownedVideoKey(body.VideoKey, user.ID) {

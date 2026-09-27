@@ -66,7 +66,15 @@ export const api = {
 
   createSession: (
     getToken: TokenGetter,
-    session: { reps: number; durationSec: number; method: string; startedAt: string; videoKey?: string },
+    session: {
+      reps: number;
+      durationSec: number;
+      method: string;
+      startedAt: string;
+      videoKey?: string;
+      repTimesMs?: number[];
+      videoStartMs?: number;
+    },
   ) => request<WorkoutSession>(getToken, '/v1/sessions', { method: 'POST', body: JSON.stringify(session) }),
 
   listSessions: (getToken: TokenGetter, opts?: { limit?: number; before?: string }) => {

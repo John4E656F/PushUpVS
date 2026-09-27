@@ -45,8 +45,14 @@ export default function SessionScreen() {
   const recorderRef = useRef<Recorder | null>(null);
   const recordedVideoRef = useRef<string | undefined>(undefined);
   const pendingFinishRef = useRef(false);
+  // Per-rep epoch timestamps (ms), kept per mode so a mid-session mode
+  // switch can't mismatch the saved mode's rep count.
+  const poseRepEpochsRef = useRef<number[]>([]);
+  const manualRepEpochsRef = useRef<number[]>([]);
+  const recordStartEpochRef = useRef<number | null>(null);
 
   const onRep = useCallback(() => {
+    poseRepEpochsRef.current.push(Date.now());
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   }, []);
   const { frameOutput, modelState, reps: poseReps, update } = usePushupCounter(onRep);
@@ -75,13 +81,22 @@ export default function SessionScreen() {
 
   const goComplete = useCallback(
     (videoUri?: string) => {
+      const startMs = startedAtRef.current.getTime();
+      const repEpochs = mode === 'pose' ? poseRepEpochsRef.current : manualRepEpochsRef.current;
+      const repTimesMs = repEpochs.map((t) => Math.max(0, t - startMs));
+      const videoStartMs =
+        videoUri && recordStartEpochRef.current != null
+          ? Math.max(0, recordStartEpochRef.current - startMs)
+          : undefined;
       router.replace({
         pathname: '/session-complete',
         params: {
           reps: String(mode === 'pose' ? poseReps : manualReps),
-          durationSec: String(Math.max(1, Math.floor((Date.now() - startedAtRef.current.getTime()) / 1000))),
+          durationSec: String(Math.max(1, Math.floor((Date.now() - startMs) / 1000))),
           method: mode,
           startedAt: startedAtRef.current.toISOString(),
+          ...(repTimesMs.length > 0 ? { repTimesMs: JSON.stringify(repTimesMs) } : {}),
+          ...(videoStartMs != null ? { videoStartMs: String(videoStartMs) } : {}),
           ...(videoUri ? { videoUri } : {}),
         },
       });
@@ -108,6 +123,8 @@ export default function SessionScreen() {
           if (pendingFinishRef.current) goComplete();
         },
       );
+      // Anchor for rep→video offsets; only the first recording is reviewed.
+      if (recordStartEpochRef.current == null) recordStartEpochRef.current = Date.now();
       setRecording(true);
     } catch {
       setRecording(false);
@@ -126,6 +143,7 @@ export default function SessionScreen() {
   }, [recording, goComplete]);
 
   const manualTap = () => {
+    manualRepEpochsRef.current.push(Date.now());
     setManualReps((r) => r + 1);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   };

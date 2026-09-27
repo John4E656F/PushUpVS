@@ -63,7 +63,14 @@ type AppState = {
   refresh: (getToken: TokenGetter) => Promise<void>;
   completeSession: (
     getToken: TokenGetter,
-    input: { reps: number; durationSec: number; method: CountMethod; startedAt: string },
+    input: {
+      reps: number;
+      durationSec: number;
+      method: CountMethod;
+      startedAt: string;
+      repTimesMs?: number[];
+      videoStartMs?: number;
+    },
   ) => Promise<WorkoutSession>;
   attachVideo: (getToken: TokenGetter, session: WorkoutSession, videoKey: string) => Promise<void>;
   deleteSession: (getToken: TokenGetter, id: string) => Promise<void>;

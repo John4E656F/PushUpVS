@@ -10,6 +10,10 @@ export type WorkoutSession = {
   method: CountMethod;
   startedAt: string; // ISO timestamp
   videoKey?: string;
+  /** Per-rep offsets in ms from startedAt — powers rep-by-rep video scrubbing. */
+  repTimesMs?: number[];
+  /** Offset of the video recording start from startedAt, in ms. */
+  videoStartMs?: number;
   /** True once the server has acknowledged this session. */
   synced: boolean;
 };

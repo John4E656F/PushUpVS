@@ -33,8 +33,13 @@ type Session struct {
 	DurationSec int           `bson:"durationSec" json:"durationSec"`
 	Method      string        `bson:"method" json:"method"` // "pose" | "manual"
 	VideoKey    string        `bson:"videoKey,omitempty" json:"videoKey,omitempty"`
-	StartedAt   time.Time     `bson:"startedAt" json:"startedAt"`
-	CreatedAt   time.Time     `bson:"createdAt" json:"createdAt"`
+	// RepTimesMs are per-rep offsets in milliseconds from StartedAt, used to
+	// scrub the workout video rep-by-rep.
+	RepTimesMs []int `bson:"repTimesMs,omitempty" json:"repTimesMs,omitempty"`
+	// VideoStartMs is the offset of the video recording start from StartedAt.
+	VideoStartMs int       `bson:"videoStartMs,omitempty" json:"videoStartMs,omitempty"`
+	StartedAt    time.Time `bson:"startedAt" json:"startedAt"`
+	CreatedAt    time.Time `bson:"createdAt" json:"createdAt"`
 }
 
 // Stats is the aggregate payload for the home/history screens.
