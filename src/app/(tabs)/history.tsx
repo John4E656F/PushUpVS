@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useRouter } from 'expo-router';
 
 import { Card, Icon } from '@/components/ui';
 import { Scroll } from '@/components/scroll';
@@ -46,12 +47,20 @@ function WeekChart() {
   );
 }
 
-function SessionRow({ session, onDelete }: { session: WorkoutSession; onDelete: () => void }) {
+function SessionRow({
+  session,
+  onOpen,
+  onDelete,
+}: {
+  session: WorkoutSession;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
   const date = new Date(session.startedAt);
   const mins = Math.floor(session.durationSec / 60);
   const secs = session.durationSec % 60;
   return (
-    <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 13 }}>
+    <Card onPress={onOpen} style={{ flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 13 }}>
       <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: 'rgba(60,228,155,0.12)', alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ fontFamily: wfontDisplay(700), fontSize: 17, color: T.accent, fontVariant: ['tabular-nums'] }}>{session.reps}</Text>
       </View>
@@ -80,6 +89,7 @@ function SessionRow({ session, onDelete }: { session: WorkoutSession; onDelete: 
 
 export default function HistoryScreen() {
   const { getToken } = useAuth();
+  const router = useRouter();
   const sessions = useStore((s) => s.sessions);
   const stats = useStore((s) => s.stats);
   const deleteSession = useStore((s) => s.deleteSession);
@@ -122,7 +132,12 @@ export default function HistoryScreen() {
       ) : (
         <View style={{ gap: 9 }}>
           {sessions.map((s) => (
-            <SessionRow key={s.id} session={s} onDelete={() => confirmDelete(s)} />
+            <SessionRow
+              key={s.id}
+              session={s}
+              onOpen={() => router.push(`/set/${s.id}`)}
+              onDelete={() => confirmDelete(s)}
+            />
           ))}
         </View>
       )}

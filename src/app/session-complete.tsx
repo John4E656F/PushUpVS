@@ -3,14 +3,14 @@
 // to Backblaze via a presigned URL.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { Bar, Btn, Card, Icon } from '@/components/ui';
+import { RepReplay } from '@/components/rep-replay';
 import { SubscriptionRequiredError } from '@/lib/api';
 import { useStore } from '@/lib/store';
 import { T, wfont, wfontDisplay } from '@/lib/theme';
@@ -57,17 +57,7 @@ export default function SessionCompleteScreen() {
   const [needsSubscription, setNeedsSubscription] = useState(false);
   const savedOnce = useRef(false);
 
-  // Rep replay: seek the recorded video to any rep with a short lead-in.
-  const player = useVideoPlayer(params.videoUri ?? null, (p) => {
-    p.loop = false;
-  });
-  const [activeRep, setActiveRep] = useState<number | null>(null);
-  const seekToRep = (i: number) => {
-    const t = Math.max(0, (repTimesMs[i] - videoStartMs) / 1000 - 1.2);
-    player.currentTime = t;
-    player.play();
-    setActiveRep(i);
-  };
+  // Rep replay is rendered by the shared component; nothing to wire here.
 
   useEffect(() => {
     if (savedOnce.current) return;
@@ -156,45 +146,7 @@ export default function SessionCompleteScreen() {
 
         {params.videoUri && reps > 0 && repTimesMs.length > 0 && (
           <Card style={{ marginTop: 12, padding: 0, overflow: 'hidden' }}>
-            <VideoView
-              player={player}
-              style={{ width: '100%', height: 240 }}
-              contentFit="cover"
-              nativeControls
-            />
-            <View style={{ padding: 14 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: wfont(700), fontSize: 14.5, color: T.text }}>Rep replay</Text>
-                <Text style={{ fontSize: 12.5, color: T.text3 }}>tap a rep to jump to it</Text>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 7, paddingTop: 10 }}
-              >
-                {repTimesMs.map((_, i) => (
-                  <Pressable
-                    key={i}
-                    onPress={() => seekToRep(i)}
-                    style={{
-                      minWidth: 40, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12,
-                      alignItems: 'center', justifyContent: 'center',
-                      backgroundColor: activeRep === i ? T.accent : 'rgba(255,255,255,0.06)',
-                      borderWidth: 1, borderColor: activeRep === i ? T.accent : T.line2,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: wfont(700), fontSize: 14, fontVariant: ['tabular-nums'],
-                        color: activeRep === i ? T.accentInk : T.text,
-                      }}
-                    >
-                      {i + 1}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
+            <RepReplay source={params.videoUri} repTimesMs={repTimesMs} videoStartMs={videoStartMs} />
           </Card>
         )}
 
